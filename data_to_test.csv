@@ -1,0 +1,7 @@
+CORREL, 'TR.close(0,-199,D)'
+CORREL, 'TR.close(0,-40,D)'
+CORREL, 'TR.priceclose(sdate=0d,edate =-40d, frq=d)'
+CORREL, 'TR.priceclose(sdate=0d,edate =-199d, frq=d)'
+AVAIL, 'tr.revenue', 'tr.close', 'tr.EV_ltst'
+
+
