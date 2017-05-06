@@ -112,7 +112,7 @@ class Result(object):
                             self.output_dict[current_key].append(None)
                         elif tag.get('t') == 'f':
                             if tag.text == 'NaN':
-                                self.output_dict[current_key].append('NaN')
+                                self.output_dict[current_key].append(float('NaN'))
                             else:
                                 value = float(tag.text)
                                 self.output_dict[current_key].append(value)
