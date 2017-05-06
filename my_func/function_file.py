@@ -3,15 +3,17 @@ import types
 import csv
 import sys
 import traceback
+import decimal
+
+types_for_correl = (types.ComplexType, types.LongType,
+                    types.IntType, types.FloatType, decimal.Decimal)
 
 
 def my_func_correl(input_list):
-    cor_coef = {}
-    types_for_correl = (types.ComplexType, types.LongType,
-                        types.IntType, types.FloatType)
+    output = {}
     for data in input_list:
         for key, value in data.items():
-            cor_coef[key] = []
+            output[key] = []
             value_vector = []
             time_vector = []
             for x, y in enumerate(value):
@@ -23,41 +25,66 @@ def my_func_correl(input_list):
                 coef = result[0][1]
             else:
                 coef = 'NaN'
-            cor_coef[key].append(coef)
-    return cor_coef
+            output[key].append(coef)
+    return output
 
 
-def my_func_regcorrel(reg_list):
-    dep_vector = []
-    indep_vector = []
-    types_for_correl = (types.ComplexType, types.LongType,
-                        types.IntType, types.FloatType)
-    for single_list in reg_list:
-        for value in single_list:
-            if isinstance(value, types_for_correl):
-                if value in reg_list[0]:
-                    dep_vector.append(value)
+# def my_func_regcorrel(reg_list):
+#     output = {}
+#     dep_vector = {}
+#     indep_vector = {}
+#     for key, value in reg_list[0].items():
+#         indep_vector[key] = [x for x in value if isinstance(x, types_for_correl)]
+#         dep_vector[key] = [y for y in reg_list[1][key] if isinstance(y, types_for_correl)]
+#         if len(dep_vector[key]) > 1 and len(dep_vector[key]) == len(indep_vector[key]):
+#             result = numpy.corrcoef(dep_vector[key], indep_vector[key])
+#             output[key] = result[0][1]
+#         else:
+#             output[key] = "NaN"
+#     return output
+
+
+def my_func_regcorrel(vector):
+    output = {}
+    value_vector = {}
+    rel_vector = {}
+    for key, value in vector[1].items():
+        value_vector[key] = [x for x in value if isinstance(x, types_for_correl)]
+        rel_vector[key] = [y for y in vector[0][key] if isinstance(y, types_for_correl)]
+    temp1 = {}
+    temp2 = {}
+    for key in value_vector:
+        if len(value_vector[key]) > 1 and len(rel_vector[key]) > 1:
+            temp1[key] = []
+            temp2[key] = []
+            for x, y in map(None, value_vector[key], rel_vector[key]):
+                if x is None or y is None:
+                    pass
                 else:
-                    indep_vector.append(value)
-    if len(dep_vector) > 1 and len(dep_vector) == len(indep_vector):
-        result = numpy.corrcoef(dep_vector, indep_vector)
-        cor_coef = result[0][1]
-    else:
-        cor_coef = "NaN"
-    return cor_coef
+                    temp1[key].append(x)
+                    temp2[key].append(y)
+            if len(value_vector[key]) > 1:
+                corr = numpy.corrcoef(temp1[key], temp2[key])[0,1]
+                if numpy.isnan(corr):
+                    output[key] = [float('NaN')]
+                else:
+                    output[key] = [corr]
+            else:
+                output[key] = [None]
+    return output
 
 
 def my_func_csv_reader(csv_file, name='all'):
-    output_list = []
+    output = []
     with open(csv_file, 'rb') as csvfile:
         reader = csv.reader(csvfile, delimiter=',', skipinitialspace='"')
         for row in reader:
             if name != 'all':
                 if name in str(row):
-                    output_list.append(row)
+                    output.append(row)
             elif name == 'all' and row:
-                output_list.append(row)
-    return output_list
+                output.append(row)
+    return output
 
 
 def my_func_reader_as_generator(csv_file, name='all'):
@@ -73,24 +100,24 @@ def my_func_reader_as_generator(csv_file, name='all'):
 
 
 def my_func_file_to_dict(csv_file):
-    output_dict = {}
+    output = {}
     data_from_csv_file = my_func_reader_as_generator(csv_file)
     for row in data_from_csv_file:
-        if row[0] not in output_dict.keys():
-            output_dict[row[0]] = [row[1:]]
+        if row[0] not in output.keys():
+            output[row[0]] = [row[1:]]
         else:
-            output_dict.get(row[0]).append(row[1:])
-    return output_dict
+            output.get(row[0]).append(row[1:])
+    return output
 
 
 def my_func_ric_reader(csv_file):
-    output_list = []
+    output = []
     with open(csv_file, 'r') as csvfile:
         reader = csv.reader(csvfile, quotechar="'", delimiter=',',
                             quoting=csv.QUOTE_ALL, skipinitialspace=True)
         for row in reader:
-            output_list.extend(row)
-    return output_list
+            output.extend(row)
+    return output
 
 
 def my_func_ric_reader_as_gen(csv_file):
@@ -102,13 +129,13 @@ def my_func_ric_reader_as_gen(csv_file):
 
 def my_func_assertion(output_value, calc_value, formula, identifier,
                       difference_value):
-    types_for_correl = (types.ComplexType, types.LongType,
-                        types.IntType, types.FloatType)
     if isinstance(output_value, types_for_correl) \
             and isinstance(calc_value, types_for_correl):
         assert abs(output_value - calc_value) < difference_value
         result = (abs(output_value - calc_value) < difference_value)
     else:
+        print output_value
+        print calc_value
         assert output_value == calc_value
         result = (output_value == calc_value)
     print("{}{}{}".format("=" * 25, " Test Passed ", "=" * 25))
@@ -143,21 +170,21 @@ def my_func_any_error_printer():
 
 
 def my_func_avail(input_list):
-    output_dict = {}
+    output = {}
     for key, value in input_list[0].items():
-        output_dict[key] = []
+        output[key] = []
         counter = 0
         for i in value:
             if i:
-                output_dict[key].append(i)
+                output[key].append(i)
                 counter += 1
             else:
                 if input_list[1][key][counter]:
-                    output_dict[key].append(input_list[1][key][counter])
+                    output[key].append(input_list[1][key][counter])
                     counter += 1
                 else:
                     if input_list[2][key][counter]:
-                        output_dict[key].append(input_list[2][key][counter])
+                        output[key].append(input_list[2][key][counter])
                     else:
-                        output_dict[key].append(None)
-    return output_dict
+                        output[key].append(None)
+    return output
