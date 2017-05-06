@@ -2,13 +2,17 @@ import argparse
 import my_func
 import my_classes
 from test_data import *
+from threadsafe_print import threadsafe_print
 
 functions = {'CORREL': my_func.my_func_correl,
-             'AVAIL': my_func.my_func_avail}
+             'AVAIL': my_func.my_func_avail,
+             'REGCORREL': my_func.my_func_regcorrel}
+
 
 results_of_test = {'passed': 0,
                    'failed': 0,
-                   'code_errors': 0}
+                   'code_errors': 0,
+                   'failed_comparison': 0}
 
 
 def argument_parser():
@@ -26,68 +30,89 @@ def argument_parser():
     return parsed_args
 
 
-def send_request_and_get_response(formula, items,
-                                  identifier, request_type, server):
-    data_to_calculate_func = []
+def send_full_request(formula, identifier, request_type, server):
     if request_type == 'soap':
-        output_from_adc_portal = my_classes.\
-            SoapRequestSender(formula, identifier, test_output)\
-            .set_address(server_dict[server]['address'])\
-            .set_uuid(test_uuid)\
-            .set_template(test_template)\
-            .set_product_id(test_product_id)\
-            .set_headers(test_headers)\
-            .set_method(test_method)\
-            .set_url(server_dict[server]['url'])\
-            .send_request()\
+        output_from_adc_portal = my_classes. \
+            SoapRequestSender(formula, identifier, test_output) \
+            .set_address(server_dict[server]['address']) \
+            .set_uuid(test_uuid) \
+            .set_template(test_template) \
+            .set_product_id(test_product_id) \
+            .set_headers(test_headers) \
+            .set_method(test_method) \
+            .set_url(server_dict[server]['url']) \
+            .send_request() \
             .parse_results()
-        for item in items:
-            data_to_calculate_func\
-                .append(my_classes.SoapRequestSender(item, identifier, test_output)
-                        .set_address(server_dict[server]['address'])
-                        .set_uuid(test_uuid)
-                        .set_template(test_template)
-                        .set_product_id(test_product_id)
-                        .set_headers(test_headers)
-                        .set_method(test_method)
-                        .set_url(server_dict[server]['url'])
-                        .send_request()
-                        .parse_results())
     else:
-        output_from_adc_portal = my_classes\
-            .RestRequestSender(formula, identifier, test_output)\
-            .set_product_id(test_product_id)\
-            .set_url(server_dict[server]['url'])\
-            .set_headers(test_headers)\
-            .send_request()\
+        output_from_adc_portal = my_classes \
+            .RestRequestSender(formula, identifier, test_output) \
+            .set_product_id(test_product_id) \
+            .set_url(server_dict[server]['url']) \
+            .set_headers(test_headers) \
+            .send_request() \
             .parse_results()
-        for item in items:
-            data_to_calculate_func\
-                .append(my_classes.RestRequestSender(item, identifier, test_output)
-                        .set_product_id(test_product_id)
-                        .set_url(server_dict[server]['url'])
-                        .set_headers(test_headers)
-                        .send_request()
-                        .parse_results())
-    return output_from_adc_portal, data_to_calculate_func
+    return output_from_adc_portal
 
 
-def response_verification(func_name, func_dict, response, test_formula):
-    calculated_results = func_dict[func_name](response[1])
-    for key in response[0].keys():
+def send_separate_items(items, identifier, request_type, server):
+    data_to_calculate_func = []
+    for item in items:
+        if request_type == 'soap':
+            data_to_calculate_func.append(
+                my_classes.SoapRequestSender(item, identifier, test_output)
+                .set_address(server_dict[server]['address'])
+                .set_uuid(test_uuid)
+                .set_template(test_template)
+                .set_product_id(test_product_id)
+                .set_headers(test_headers)
+                .set_method(test_method)
+                .set_url(server_dict[server]['url'])
+                .send_request()
+                .parse_results())
+        else:
+            data_to_calculate_func.append(
+                my_classes.RestRequestSender(item, identifier, test_output)
+                .set_product_id(test_product_id)
+                .set_url(server_dict[server]['url'])
+                .set_headers(test_headers)
+                .send_request()
+                .parse_results())
+    return data_to_calculate_func
+
+
+def record_failed_comparison(key, calc_value, adc_value):
+    global results_of_test
+    threadsafe_print('%s %s %s' % (key, calc_value, adc_value))
+    results_of_test['failed_comparison'] += 1
+
+
+# def response_verification(func_name, func_dict, adc_full_response,
+#                           adc_separate_response, test_formula):
+#     calculated_results = func_dict[func_name](adc_separate_response)
+#     for key in adc_full_response.keys():
+#         counter = 0
+#         for adc_value in adc_full_response[key]:
+#             calc_value = calculated_results[key][counter]
+#             result = my_func.my_func_assertion(adc_value,
+#                                                calc_value,
+#                                                test_formula,
+#                                                key,
+#                                                CORREL_DIF)
+#             counter += 1
+#             if result:
+#                 results_of_test['passed'] += 1
+#             else:
+#                 results_of_test['failed'] += 1
+
+
+def response_verification(func_name, func_dict, adc_full_response,
+                          adc_separate_response, formula):
+    calculated_results = func_dict[func_name](adc_separate_response)
+    for key in adc_full_response.keys():
         counter = 0
-        for value in response[0][key]:
+        for adc_value in adc_full_response[key]:
             calc_value = calculated_results[key][counter]
-            result = my_func.my_func_assertion(value,
-                                               calc_value,
-                                               test_formula,
-                                               key,
-                                               CORREL_DIF)
-            counter += 1
-            if result:
-                results_of_test['passed'] += 1
-            else:
-                results_of_test['failed'] += 1
+
 
 
 if __name__ == "__main__":
@@ -99,13 +124,21 @@ if __name__ == "__main__":
     try:
         for func in test_data:
             for single_test_data in test_data[func]:
-                test_formula = "{0}({1})".format(func, ','.join(single_test_data))
-                response = send_request_and_get_response(test_formula,
-                                                         single_test_data,
-                                                         test_identifier,
-                                                         args.request_type,
-                                                         args.server)
-                response_verification(func, functions, response, test_formula)
+                test_formula = "{0}({1})".format(func, ','
+                                                 .join(single_test_data))
+                full_response = send_full_request(test_formula,
+                                                  test_identifier,
+                                                  args.request_type,
+                                                  args.server)
+                separate_response = send_separate_items(single_test_data,
+                                                        test_identifier,
+                                                        args.request_type,
+                                                        args.server)
+                response_verification(func,
+                                      functions,
+                                      full_response,
+                                      separate_response,
+                                      test_formula)
 
     except AssertionError:
         my_func.my_func_error_printer(test_formula, test_identifier)
